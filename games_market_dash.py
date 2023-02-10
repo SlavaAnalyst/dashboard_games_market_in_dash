@@ -43,13 +43,15 @@ date_filter = dcc.DatePickerRange(
     display_format='YYYY'
 )
 # Фильтр жанра
-Genre_filter = dcc.Dropdown(df.Genre.value_counts().index.to_list(),
+Genre_filter = dcc.Dropdown(
+                            df.Genre.value_counts().index.to_list(),
                             df.Genre.value_counts().index.to_list(),
                             id='genre_dropdown',
                             multi=True
                             )
 # Фильтр рейтинга
-Rating_filter = dcc.Dropdown(df.Rating.value_counts().index.to_list(),
+Rating_filter = dcc.Dropdown(
+                             df.Rating.value_counts().index.to_list(),
                              df.Rating.value_counts().index.to_list(),
                              id='rating_dropdown',
                              multi=True
