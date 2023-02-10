@@ -1,141 +1,160 @@
-from dash import Dash, html, dcc, Input, Output
-import pandas as pd
+from dash import Dash, dcc, html, Input, Output
+import dash_bootstrap_components as dbc
 import plotly.express as px
+import pandas as pd
 
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+# ____________________CLEANING DATA____________________
+path = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSKWg6_bEndzMnuCQ8ZWGrBTfsZfI9UM3ilmqeOO2-xZeRZSm54oeIkdxeiI_ZYCr7kEy1bE2RFmFD9/pub?gid=73997209&single=true&output=csv'
+df = pd.read_csv(path)
+df = df[df.Year_of_Release >= 2000]
+df = df.dropna()
+# User_Score = object
+# df['User_Score'].astype('float')
+# ValueError: could not convert string to float: 'tbd'
+df = df[df.User_Score != 'tbd']
+df['User_Score'] = df['User_Score'].astype('float')
+df['Year_of_Release'] = df['Year_of_Release'].apply(lambda x: round(x))
+df['Year_of_Release'] = pd.to_datetime(df['Year_of_Release'], format='%Y')
+df = df.sort_values('Year_of_Release')
 
-app = Dash(__name__, external_stylesheets=external_stylesheets)
+app = Dash(__name__,
+           external_stylesheets=[dbc.themes.CERULEAN])
 
-df = pd.read_csv('https://plotly.github.io/datasets/country_indicators.csv')
+# ____________________BUILD GRAPHS____________________
+area = df.groupby(['Year_of_Release', 'Platform']).Name.count().to_frame().reset_index().rename(
+    columns={'Name': 'Количество игр'})
+px_area = px.area(area, x='Year_of_Release', y='Количество игр', color='Platform')
+px_scatter = px.scatter(df, x='Critic_Score', y='User_Score', color='Genre')
 
+markdown_text = '''
+## Развитие игровой индустрии с 2000 по 2016 годы
 
-app.layout = html.Div([
-    html.Div([
+Назначения дашборда - отслеживание динамики выпуска игровый платформ и наблюдение за успешностью игры в зависимости от года релиза, жанра и рейтинга игры.
+'''
 
-        html.Div([
-            dcc.Dropdown(
-                df['Indicator Name'].unique(),
-                'Fertility rate, total (births per woman)',
-                id='crossfilter-xaxis-column',
-            ),
-            dcc.RadioItems(
-                ['Linear', 'Log'],
-                'Linear',
-                id='crossfilter-xaxis-type',
-                labelStyle={'display': 'inline-block', 'marginTop': '5px'}
-            )
+# ____________________FILTERS____________________
+# Фильтр года
+date_filter = dcc.DatePickerRange(
+    id='date_picker_range',
+    min_date_allowed=df['Year_of_Release'].min(),
+    max_date_allowed=df['Year_of_Release'].max(),
+    start_date=df['Year_of_Release'].min(),
+    end_date=df['Year_of_Release'].max(),
+    display_format='YYYY'
+)
+# Фильтр жанра
+Genre_filter = dcc.Dropdown(df.Genre.value_counts().index.to_list(),
+                            df.Genre.value_counts().index.to_list(),
+                            id='genre_dropdown',
+                            multi=True
+                            )
+# Фильтр рейтинга
+Rating_filter = dcc.Dropdown(df.Rating.value_counts().index.to_list(),
+                             df.Rating.value_counts().index.to_list(),
+                             id='rating_dropdown',
+                             multi=True
+                             )
+
+# ____________________LAYOUT____________________
+app.layout = html.Div(children=[
+
+    # Заголовок
+    dbc.Row([
+        dcc.Markdown(markdown_text,
+                     style={'margin-left': '40px', 'margin-top': '30px', 'margin-bottom': '10px'})
+    ]),
+
+    # Фильтр жанра
+    dbc.Row([
+        html.Div('Выберите жанр',
+                 style={'text-align': 'center', 'color': '#555555'}),
+        html.Div(Genre_filter)
+    ],
+        style={'margin-left': '115px', 'margin-bottom': '0px', 'margin-right': '115px'}
+    ),
+
+    # Фильтр года
+    dbc.Row([
+        dbc.Col([
+            html.Div('Введите год (2000-2016)',
+                     style={'text-align': 'center', 'color': '#555555'}),
+            html.Div(date_filter,
+                     style={'margin-left': '130px', 'margin-bottom': '10px', 'margin-right': '1px'})
         ],
-        style={'width': '49%', 'display': 'inline-block'}),
+            width=5
+        ),
 
-        html.Div([
-            dcc.Dropdown(
-                df['Indicator Name'].unique(),
-                'Life expectancy at birth, total (years)',
-                id='crossfilter-yaxis-column'
-            ),
-            dcc.RadioItems(
-                ['Linear', 'Log'],
-                'Linear',
-                id='crossfilter-yaxis-type',
-                labelStyle={'display': 'inline-block', 'marginTop': '5px'}
-            )
-        ], style={'width': '49%', 'float': 'right', 'display': 'inline-block'})
-    ], style={
-        'padding': '10px 5px'
-    }),
-
-    html.Div([
-        dcc.Graph(
-            id='crossfilter-indicator-scatter',
-            hoverData={'points': [{'customdata': 'Japan'}]}
+        # Фильтр рейтинга
+        dbc.Col([
+            html.Div('Выберите рейтинг',
+                     style={'text-align': 'center', 'color': '#555555'}),
+            html.Div(Rating_filter,
+                     style={'margin-bottom': '10px', 'margin-left': '250px', 'margin-right': '130px'})
+        ]
         )
-    ], style={'width': '49%', 'display': 'inline-block', 'padding': '0 20'}),
-    html.Div([
-        dcc.Graph(id='x-time-series'),
-        dcc.Graph(id='y-time-series'),
-    ], style={'display': 'inline-block', 'width': '49%'}),
+    ], style={'margin-bottom': '30px'}),
 
-    html.Div(dcc.Slider(
-        df['Year'].min(),
-        df['Year'].max(),
-        step=None,
-        id='crossfilter-year--slider',
-        value=df['Year'].max(),
-        marks={str(year): str(year) for year in df['Year'].unique()}
-    ), style={'width': '49%', 'padding': '0px 20px 20px 20px'})
-])
+    # График area и интерактивный текст
+    dbc.Row([
+        dbc.Col([
+            html.Label(id="count_games",
+                       style={'margin-left': '190px', 'font-size': 20}),
+            html.Div([
+                dcc.Graph(id="px_area", figure=px_area)
+            ]),
+        ], width=6
+        ),
+
+        # Фильтр рейтинга
+        dbc.Col([
+            html.Label("Оценки игроков и критиков по жанру",
+                       style={'margin-left': '180px', 'margin-bottom': '20px',
+                              'font-size': 20}),
+            dcc.Graph(id="px_scatter", figure=px_scatter)
+        ], width=6
+        )
+    ], style={'margin-bottom': '30px'}
+    )
+], style={'margin-left': '20px',
+          'margin-right': '20px'}
+)
 
 
+# ____________________CALLBACK____________________
 @app.callback(
-    Output('crossfilter-indicator-scatter', 'figure'),
-    Input('crossfilter-xaxis-column', 'value'),
-    Input('crossfilter-yaxis-column', 'value'),
-    Input('crossfilter-xaxis-type', 'value'),
-    Input('crossfilter-yaxis-type', 'value'),
-    Input('crossfilter-year--slider', 'value'))
-def update_graph(xaxis_column_name, yaxis_column_name,
-                 xaxis_type, yaxis_type,
-                 year_value):
-    dff = df[df['Year'] == year_value]
+    [
+        Output(component_id='px_area', component_property='figure'),
+        Output(component_id='px_scatter', component_property='figure'),
+        Output(component_id='count_games', component_property='children')
+    ],
+    [
+        Input(component_id='date_picker_range', component_property='start_date'),
+        Input(component_id='date_picker_range', component_property='end_date'),
+        Input(component_id='rating_dropdown', component_property='value'),
+        Input(component_id='genre_dropdown', component_property='value')
+    ]
+)
 
-    fig = px.scatter(x=dff[dff['Indicator Name'] == xaxis_column_name]['Value'],
-            y=dff[dff['Indicator Name'] == yaxis_column_name]['Value'],
-            hover_name=dff[dff['Indicator Name'] == yaxis_column_name]['Country Name']
-            )
+def update_date(start_date, end_date, rating, genre):
+    between_df = df[df['Year_of_Release'].between(pd.to_datetime(start_date), pd.to_datetime(end_date))]
+    df_full_filters = between_df.query('Rating == @rating and Genre == @genre')
 
-    fig.update_traces(customdata=dff[dff['Indicator Name'] == yaxis_column_name]['Country Name'])
+    df_area = df_full_filters.groupby(['Year_of_Release', 'Platform']).Name.count().to_frame().reset_index().rename(
+        columns={'Name': 'Количество игр'})
+    px_area = px.area(df_area, x='Year_of_Release', y='Количество игр', color='Platform',
+                      labels={"Platform": "", "Количество игр": "Количество игр",
+                              "Year_of_Release": "Год релиза"}).update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)'},
+                                                                              margin=dict(l=0, r=0, t=20, b=30),
+                                                                              legend_orientation="h")
 
-    fig.update_xaxes(title=xaxis_column_name, type='linear' if xaxis_type == 'Linear' else 'log')
+    px_scatter = px.scatter(df_full_filters, x='Critic_Score', y='User_Score', color='Genre', opacity=0.75,
+                            labels={"Genre": "", "User_Score": "Оценка игрока",
+                                    "Critic_Score": "Оценка критика"}).update_layout(
+        {'plot_bgcolor': 'rgba(0, 0, 0, 0)'},
+        margin=dict(l=0, r=0, t=20, b=30))
 
-    fig.update_yaxes(title=yaxis_column_name, type='linear' if yaxis_type == 'Linear' else 'log')
-
-    fig.update_layout(margin={'l': 40, 'b': 40, 't': 10, 'r': 0}, hovermode='closest')
-
-    return fig
-
-
-def create_time_series(dff, axis_type, title):
-
-    fig = px.scatter(dff, x='Year', y='Value')
-
-    fig.update_traces(mode='lines+markers')
-
-    fig.update_xaxes(showgrid=False)
-
-    fig.update_yaxes(type='linear' if axis_type == 'Linear' else 'log')
-
-    fig.add_annotation(x=0, y=0.85, xanchor='left', yanchor='bottom',
-                       xref='paper', yref='paper', showarrow=False, align='left',
-                       text=title)
-
-    fig.update_layout(height=225, margin={'l': 20, 'b': 30, 'r': 10, 't': 10})
-
-    return fig
-
-
-@app.callback(
-    Output('x-time-series', 'figure'),
-    Input('crossfilter-indicator-scatter', 'hoverData'),
-    Input('crossfilter-xaxis-column', 'value'),
-    Input('crossfilter-xaxis-type', 'value'))
-def update_y_timeseries(hoverData, xaxis_column_name, axis_type):
-    country_name = hoverData['points'][0]['customdata']
-    dff = df[df['Country Name'] == country_name]
-    dff = dff[dff['Indicator Name'] == xaxis_column_name]
-    title = '<b>{}</b><br>{}'.format(country_name, xaxis_column_name)
-    return create_time_series(dff, axis_type, title)
-
-
-@app.callback(
-    Output('y-time-series', 'figure'),
-    Input('crossfilter-indicator-scatter', 'hoverData'),
-    Input('crossfilter-yaxis-column', 'value'),
-    Input('crossfilter-yaxis-type', 'value'))
-def update_x_timeseries(hoverData, yaxis_column_name, axis_type):
-    dff = df[df['Country Name'] == hoverData['points'][0]['customdata']]
-    dff = dff[dff['Indicator Name'] == yaxis_column_name]
-    return create_time_series(dff, axis_type, yaxis_column_name)
-
+    children = f'Количество выпущенных игр ({df_full_filters.Name.count()} шт)'
+    return px_area, px_scatter, children
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=True, port=5004)  # port=8050
