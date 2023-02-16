@@ -12,3 +12,5 @@
 - User_Score - оценка игроков;
 - Rating - возрастной рейтинг.
  
+ ### Используемые библиотеки
+`pandas` `plotly.express` `dash_bootstrap_components` `Dash` `dcc` `html` `Input` `Output`
